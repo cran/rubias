@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+<meta charset="utf-8" />
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="pandoc" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<meta name="author" content="Eric C. Anderson" />
+
+<meta name="date" content="2018-01-26" />
+
+<title>An Explanation of the Underlying Data Structures in rubias</title>
+
+
+
+<style type="text/css">code{white-space: pre;}</style>
+<style type="text/css">
+div.sourceCode { overflow-x: auto; }
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal */
+code > span.bn { color: #40a070; } /* BaseN */
+code > span.fl { color: #40a070; } /* Float */
+code > span.ch { color: #4070a0; } /* Char */
+code > span.st { color: #4070a0; } /* String */
+code > span.co { color: #60a0b0; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* Other */
+code > span.al { color: #ff0000; font-weight: bold; } /* Alert */
+code > span.fu { color: #06287e; } /* Function */
+code > span.er { color: #ff0000; font-weight: bold; } /* Error */
+code > span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+code > span.cn { color: #880000; } /* Constant */
+code > span.sc { color: #4070a0; } /* SpecialChar */
+code > span.vs { color: #4070a0; } /* VerbatimString */
+code > span.ss { color: #bb6688; } /* SpecialString */
+code > span.im { } /* Import */
+code > span.va { color: #19177c; } /* Variable */
+code > span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+code > span.op { color: #666666; } /* Operator */
+code > span.bu { } /* BuiltIn */
+code > span.ex { } /* Extension */
+code > span.pp { color: #bc7a00; } /* Preprocessor */
+code > span.at { color: #7d9029; } /* Attribute */
+code > span.do { color: #ba2121; font-style: italic; } /* Documentation */
+code > span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+code > span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+code > span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+</style>
+
+
+
+<link href="data:text/css;charset=utf-8,body%20%7B%0Abackground%2Dcolor%3A%20%23fff%3B%0Amargin%3A%201em%20auto%3B%0Amax%2Dwidth%3A%20700px%3B%0Aoverflow%3A%20visible%3B%0Apadding%2Dleft%3A%202em%3B%0Apadding%2Dright%3A%202em%3B%0Afont%2Dfamily%3A%20%22Open%20Sans%22%2C%20%22Helvetica%20Neue%22%2C%20Helvetica%2C%20Arial%2C%20sans%2Dserif%3B%0Afont%2Dsize%3A%2014px%3B%0Aline%2Dheight%3A%201%2E35%3B%0A%7D%0A%23header%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0A%23TOC%20%7B%0Aclear%3A%20both%3B%0Amargin%3A%200%200%2010px%2010px%3B%0Apadding%3A%204px%3B%0Awidth%3A%20400px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Aborder%2Dradius%3A%205px%3B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Afont%2Dsize%3A%2013px%3B%0Aline%2Dheight%3A%201%2E3%3B%0A%7D%0A%23TOC%20%2Etoctitle%20%7B%0Afont%2Dweight%3A%20bold%3B%0Afont%2Dsize%3A%2015px%3B%0Amargin%2Dleft%3A%205px%3B%0A%7D%0A%23TOC%20ul%20%7B%0Apadding%2Dleft%3A%2040px%3B%0Amargin%2Dleft%3A%20%2D1%2E5em%3B%0Amargin%2Dtop%3A%205px%3B%0Amargin%2Dbottom%3A%205px%3B%0A%7D%0A%23TOC%20ul%20ul%20%7B%0Amargin%2Dleft%3A%20%2D2em%3B%0A%7D%0A%23TOC%20li%20%7B%0Aline%2Dheight%3A%2016px%3B%0A%7D%0Atable%20%7B%0Amargin%3A%201em%20auto%3B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dcolor%3A%20%23DDDDDD%3B%0Aborder%2Dstyle%3A%20outset%3B%0Aborder%2Dcollapse%3A%20collapse%3B%0A%7D%0Atable%20th%20%7B%0Aborder%2Dwidth%3A%202px%3B%0Apadding%3A%205px%3B%0Aborder%2Dstyle%3A%20inset%3B%0A%7D%0Atable%20td%20%7B%0Aborder%2Dwidth%3A%201px%3B%0Aborder%2Dstyle%3A%20inset%3B%0Aline%2Dheight%3A%2018px%3B%0Apadding%3A%205px%205px%3B%0A%7D%0Atable%2C%20table%20th%2C%20table%20td%20%7B%0Aborder%2Dleft%2Dstyle%3A%20none%3B%0Aborder%2Dright%2Dstyle%3A%20none%3B%0A%7D%0Atable%20thead%2C%20table%20tr%2Eeven%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Ap%20%7B%0Amargin%3A%200%2E5em%200%3B%0A%7D%0Ablockquote%20%7B%0Abackground%2Dcolor%3A%20%23f6f6f6%3B%0Apadding%3A%200%2E25em%200%2E75em%3B%0A%7D%0Ahr%20%7B%0Aborder%2Dstyle%3A%20solid%3B%0Aborder%3A%20none%3B%0Aborder%2Dtop%3A%201px%20solid%20%23777%3B%0Amargin%3A%2028px%200%3B%0A%7D%0Adl%20%7B%0Amargin%2Dleft%3A%200%3B%0A%7D%0Adl%20dd%20%7B%0Amargin%2Dbottom%3A%2013px%3B%0Amargin%2Dleft%3A%2013px%3B%0A%7D%0Adl%20dt%20%7B%0Afont%2Dweight%3A%20bold%3B%0A%7D%0Aul%20%7B%0Amargin%2Dtop%3A%200%3B%0A%7D%0Aul%20li%20%7B%0Alist%2Dstyle%3A%20circle%20outside%3B%0A%7D%0Aul%20ul%20%7B%0Amargin%2Dbottom%3A%200%3B%0A%7D%0Apre%2C%20code%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0Aborder%2Dradius%3A%203px%3B%0Acolor%3A%20%23333%3B%0Awhite%2Dspace%3A%20pre%2Dwrap%3B%20%0A%7D%0Apre%20%7B%0Aborder%2Dradius%3A%203px%3B%0Amargin%3A%205px%200px%2010px%200px%3B%0Apadding%3A%2010px%3B%0A%7D%0Apre%3Anot%28%5Bclass%5D%29%20%7B%0Abackground%2Dcolor%3A%20%23f7f7f7%3B%0A%7D%0Acode%20%7B%0Afont%2Dfamily%3A%20Consolas%2C%20Monaco%2C%20%27Courier%20New%27%2C%20monospace%3B%0Afont%2Dsize%3A%2085%25%3B%0A%7D%0Ap%20%3E%20code%2C%20li%20%3E%20code%20%7B%0Apadding%3A%202px%200px%3B%0A%7D%0Adiv%2Efigure%20%7B%0Atext%2Dalign%3A%20center%3B%0A%7D%0Aimg%20%7B%0Abackground%2Dcolor%3A%20%23FFFFFF%3B%0Apadding%3A%202px%3B%0Aborder%3A%201px%20solid%20%23DDDDDD%3B%0Aborder%2Dradius%3A%203px%3B%0Aborder%3A%201px%20solid%20%23CCCCCC%3B%0Amargin%3A%200%205px%3B%0A%7D%0Ah1%20%7B%0Amargin%2Dtop%3A%200%3B%0Afont%2Dsize%3A%2035px%3B%0Aline%2Dheight%3A%2040px%3B%0A%7D%0Ah2%20%7B%0Aborder%2Dbottom%3A%204px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Apadding%2Dbottom%3A%202px%3B%0Afont%2Dsize%3A%20145%25%3B%0A%7D%0Ah3%20%7B%0Aborder%2Dbottom%3A%202px%20solid%20%23f7f7f7%3B%0Apadding%2Dtop%3A%2010px%3B%0Afont%2Dsize%3A%20120%25%3B%0A%7D%0Ah4%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23f7f7f7%3B%0Amargin%2Dleft%3A%208px%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Ah5%2C%20h6%20%7B%0Aborder%2Dbottom%3A%201px%20solid%20%23ccc%3B%0Afont%2Dsize%3A%20105%25%3B%0A%7D%0Aa%20%7B%0Acolor%3A%20%230033dd%3B%0Atext%2Ddecoration%3A%20none%3B%0A%7D%0Aa%3Ahover%20%7B%0Acolor%3A%20%236666ff%3B%20%7D%0Aa%3Avisited%20%7B%0Acolor%3A%20%23800080%3B%20%7D%0Aa%3Avisited%3Ahover%20%7B%0Acolor%3A%20%23BB00BB%3B%20%7D%0Aa%5Bhref%5E%3D%22http%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0Aa%5Bhref%5E%3D%22https%3A%22%5D%20%7B%0Atext%2Ddecoration%3A%20underline%3B%20%7D%0A%0Acode%20%3E%20span%2Ekw%20%7B%20color%3A%20%23555%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Edt%20%7B%20color%3A%20%23902000%3B%20%7D%20%0Acode%20%3E%20span%2Edv%20%7B%20color%3A%20%2340a070%3B%20%7D%20%0Acode%20%3E%20span%2Ebn%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Efl%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Ech%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Est%20%7B%20color%3A%20%23d14%3B%20%7D%20%0Acode%20%3E%20span%2Eco%20%7B%20color%3A%20%23888888%3B%20font%2Dstyle%3A%20italic%3B%20%7D%20%0Acode%20%3E%20span%2Eot%20%7B%20color%3A%20%23007020%3B%20%7D%20%0Acode%20%3E%20span%2Eal%20%7B%20color%3A%20%23ff0000%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%0Acode%20%3E%20span%2Efu%20%7B%20color%3A%20%23900%3B%20font%2Dweight%3A%20bold%3B%20%7D%20%20code%20%3E%20span%2Eer%20%7B%20color%3A%20%23a61717%3B%20background%2Dcolor%3A%20%23e3d2d2%3B%20%7D%20%0A" rel="stylesheet" type="text/css" />
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">An Explanation of the Underlying Data Structures in rubias</h1>
+<h4 class="author"><em>Eric C. Anderson</em></h4>
+<h4 class="date"><em>2018-01-26</em></h4>
+
+
+
+<p>In order to be computationally efficient and allow for multiallelic markers, with <code>rubias</code> we boil most of the data down to a bunch of integer vectors in a data structure that we operate on with some compiled code.</p>
+<p>This document is intended to document that data structure (mostly for Eric’s benefit, at this point. We should have had a document like this a long time ago).</p>
+<div id="the-param_list" class="section level2">
+<h2>The <code>param_list</code></h2>
+<p>The basic data structure is what we call a <code>param_list</code>. it has the following named elements, which are briefly described here. We will describe each in detail in separate sections below.</p>
+<ul>
+<li><code>L</code>: the number of loci, an integer</li>
+<li><code>N</code>: the number of individuals (integer)<br />
+</li>
+<li><code>C</code>: the number of collections in the reference data set (integer)</li>
+<li><code>A</code>: the number of alleles at each locus (integer vector of length L)</li>
+<li><code>CA</code>: the “cumulative number of alleles” at each locus. For each locus this gives the base-0 index of the first allele at the locus (if you were to line all the alleles at each locus up one after another.)</li>
+<li><code>coll</code>: an integer vector of length N that gives the index of the collection that each fish is in.</li>
+<li><code>coll_N</code>: an integer vector of length C that gives the number of fish in each of the collections</li>
+<li><code>RU_vec</code>: This is the hardest one to figure out / remember. Imagine that each collection has an index from 1 up to C, and imagine that each collection belongs to a single reporting unit. Each reporting unit is assigned an integer. Now, sort everything first by reporting unit index and then by collection index. The order that you get is the order of the collections in <code>RU_vec</code>. This vector is a named integer vector. The collections are in the order as described above. The names are the collection names and the values are the base-1 index of each collection.<br />
+</li>
+<li><p><code>RU_starts</code>: The base-0 index of the starting position of each reporting unit in the <code>RU_vec</code> vector. This is a named integer vector. For example, the first few entries of the chinook data set are:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">cpar &lt;-<span class="st"> </span><span class="kw">tcf2param_list</span>(chinook, <span class="dv">5</span>, <span class="dt">summ =</span> <span class="ot">FALSE</span>)
+cpar<span class="op">$</span>RU_starts[<span class="dv">1</span><span class="op">:</span><span class="dv">5</span>]
+<span class="co">#&gt; CentralValleyfa CentralValleysp CentralValleywi CaliforniaCoast </span>
+<span class="co">#&gt;               0               8              12              13 </span>
+<span class="co">#&gt;        KlamathR </span>
+<span class="co">#&gt;              15</span></code></pre></div>
+<p>and if we look at the first 15 elements of <code>RU_vec</code> it gives us the names and the indices of the collections in those first 4 listed reporting units:</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">cpar<span class="op">$</span>RU_vec[<span class="dv">1</span><span class="op">:</span><span class="dv">15</span>]
+<span class="co">#&gt;         Feather_H_sp         Feather_H_fa          Butte_Cr_fa </span>
+<span class="co">#&gt;                    1                    6                    7 </span>
+<span class="co">#&gt;           Mill_Cr_fa           Deer_Cr_fa       Mokelumne_R_fa </span>
+<span class="co">#&gt;                    8                    9                   10 </span>
+<span class="co">#&gt;            Battle_Cr      Sacramento_R_lf          Butte_Cr_Sp </span>
+<span class="co">#&gt;                   11                   12                    2 </span>
+<span class="co">#&gt;           Mill_Cr_sp           Deer_Cr_sp UpperSacramento_R_sp </span>
+<span class="co">#&gt;                    3                    4                    5 </span>
+<span class="co">#&gt;         Sacramento_H                Eel_R            Russian_R </span>
+<span class="co">#&gt;                   13                   14                   15</span></code></pre></div></li>
+<li><code>I</code>: an integer vector giving the allelic type of each gene copy carried by each individual. For ploidy = 2 (the only case implemented so far) this vector is of length (N * L * 2). An entry of 0 denotes missing data, and the observed alleles are named 1, 2, …</li>
+<li><code>AC</code>: this is a flat integer vector of the counts of alleles of different types in the different populations. It has length C * sum(A) (i.e. the number of collections in the reference times that total number of alleles at all the loci.). This is created by a somewhat lengthy process: first the function <code>reference_allele_counts()</code> makes a long data frame that has <code>collection</code>, <code>locus</code>, <code>allele</code>, and <code>counts</code>. This then gets turned into a list of matrices in <code>a_freq_list()</code>. One matrix for each collection. The rows are the different alleles and the columns are the different populations. Then in <code>list_diploid_params()</code> that list of matrices gets flattened into one long integer vector.<br />
+One of the weaknesses as I see that now, is that the loci are arranged alphabetically, rather than by input order. We should at least include the names of the loci in the order in which they appear so that we can get back to the loci, if necessary. The order of the loci coming out of this process is used to make sure that it corresponds to the order of the loci in <code>I</code>, which is good, but not super intuitive. At any rate, from the foregoing, it can be deduced that we can index into this vector thus (all indexes are base-0): if we want the count of the a-th allele at the l-th locus in the c-th collection then we get that by base-0 subscipting <code>AC</code> by <code>[C * CA[l] + c * A[l] + a].  Where</code>C<code>is the number of collections,</code>CA<code>is the cumulative number of alleles, and</code>A<code>is the number of alleles at each locus. Now it should be clear why we store</code>CA`—this is where we use it!</li>
+<li><code>sum_AC</code>: the sum of the allele counts at each locus for each collection in the reference data set. (Basically the number of observed gene copies at the locus in the reference data set). This gets computed in <code>list_diploid_params()</code> from the list of matrices returned by <code>a_freq_list()</code>. It is of length L * C. It is a named vector with the names taking <code>Locus.Collection</code>, but I don’t think those names get used at all. It gets indexed as <code>[l * C + c]</code></li>
+<li><code>DP</code>: this is a vector completely parallel to <code>AC</code> but in which the prior weights have been added to each allele in each collection.<br />
+</li>
+<li><p><code>sum_DP</code>: this is the sum of Dirichlet Parameters <code>DP</code> for each locus and each collection. It is parallel to <code>sum_AC</code>.</p></li>
+</ul>
+<p>Finally, we have some entries that we should have had from day one, but didn’t, so they aren’t consistently used throughout the code to access the names of entities ordered as they ended up ordered: - <code>indiv_names</code> - <code>collection_names</code> - <code>repunit_names</code> - <code>locus_names</code></p>
+</div>
+<div id="howwhere-do-all-these-get-set" class="section level2">
+<h2>How/Where do all these get set?</h2>
+<p>This is a trickier question than it seems, because things are done slightly differently in the different top-level functions.</p>
+<div id="assess_reference_loo-and-assess_reference_mc" class="section level3">
+<h3>assess_reference_loo() and assess_reference_mc()</h3>
+<p>In both of these functions, the original data sets gets read in, collection and repunit get converted to factors, and then the <code>param_list</code> is made inside a single function: <code>tcf2param_list()</code>.</p>
+</div>
+<div id="assess_pb_bias_correction" class="section level3">
+<h3>assess_pb_bias_correction()</h3>
+<p>Same as above, this uses <code>tcf2param_list()</code> after doing a few other steps on the original data frame.</p>
+</div>
+<div id="self_assign" class="section level3">
+<h3>self_assign()</h3>
+<p>Uses <code>tcf2param_list()</code> unless it is using preCompiledParams so that it can run through stuff during infer_mixture to compute the locus-specific means and variances of the log-likelihoods.</p>
+</div>
+<div id="infer_mixture" class="section level3">
+<h3>infer_mixture()</h3>
+<p>This is the tough one. Because we end up doing multiple mixture collections, we couldn’t simply use <code>tcf2param_list()</code> in the function. Rather, we create a summary for the reference sample (keeping track of alleles found in both the reference and the mixture), and then we split the mixture samples up by mixture collection and use</p>
+</div>
+</div>
+<div id="dealing-with-012-matrices" class="section level2">
+<h2>Dealing with 012 matrices</h2>
+<p>One problem with the current approach is that it is terribly slow when you start to get 10K+ SNPs. It would be much faster to read and store those data in an 012 matrix. Here is how I am thinking I could deal with that:</p>
+<ul>
+<li><p>For the functions that use <code>tcf2param_list()</code> I could just write another function, <code>tcf2param_list_012()</code>, that took <code>D</code> as just a data frame with <code>sample_type</code>, <code>collection</code>, and <code>repunit</code> and <code>indiv</code>, and then had an 012 matrix with the genetic data in it, with indiv names in the rownames and locus names in the colnames. Then we just have to deal with seeing AC_list and I_list correctly. <em>Actually</em>, looking at it now, I can just do it in the same <code>tcf2param_list()</code> function. If the <code>d012</code> parameter is not NULL we would:</p>
+<ol style="list-style-type: decimal">
+<li>make <code>cleaned$long</code> NULL, and set <code>cleaned$clean_short</code> to <code>D</code>.</li>
+<li>make the <code>AC_list</code> directly from the 012 matrix. This should be super straightforward. I would probably want to drop monomorphic loci first.</li>
+<li>make the I_list from the 012 matrix</li>
+</ol></li>
+</ul>
+<p>Cool, in order to do all this I should make two new functions: <code>reference_allele_counts_012</code> and <code>allelic_list_012</code>. That might give me enough insight that I could easily do it for <code>infer_mixture</code>, too.</p>
+</div>
+
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
