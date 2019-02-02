@@ -36,6 +36,7 @@ NumericMatrix geno_logL(List par_list) {
   IntegerVector coll = as<IntegerVector>(par_list["coll"]);
   NumericVector DP = as<NumericVector>(par_list["DP"]);
   NumericVector sum_DP = as<NumericVector>(par_list["sum_DP"]);
+  IntegerVector PLOID = as<IntegerVector>(par_list["ploidies"]);
   double sum, gp;
   NumericMatrix out(C, N);
 
@@ -44,7 +45,7 @@ NumericMatrix geno_logL(List par_list) {
       sum = 0.0;
       LOO = c == (coll[i] - 1);
       for(l = 0; l < L; l++) {  // cycle over loci
-        GPROB_DIP(i, l, c, gp);
+        GPROB(i, l, c, gp);
         sum += log(gp);
       }
       out(c, i) = sum;
@@ -90,6 +91,7 @@ NumericMatrix geno_logL_ssq(List par_list) {
   IntegerVector coll = as<IntegerVector>(par_list["coll"]);
   NumericVector DP = as<NumericVector>(par_list["DP"]);
   NumericVector sum_DP = as<NumericVector>(par_list["sum_DP"]);
+  IntegerVector PLOID = as<IntegerVector>(par_list["ploidies"]);
   double sum, gp;
   NumericMatrix out(C, N);
 
@@ -98,7 +100,7 @@ NumericMatrix geno_logL_ssq(List par_list) {
       sum = 0.0;
       LOO = c == (coll[i] - 1);
       for(l = 0; l < L; l++) {  // cycle over loci
-        GPROB_DIP(i, l, c, gp);
+        GPROB(i, l, c, gp);
         sum += log(gp) * log(gp);
       }
       out(c, i) = sum;

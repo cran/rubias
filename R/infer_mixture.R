@@ -7,7 +7,7 @@
 #' "MCMC" estimates mixing proportions and individual posterior
 #' probabilities of assignment through Markov-chain Monte Carlo,
 #' while "PB" does the same with a parametric bootstrapping correction
-#' All methods use a uniform 1/(# collections or RUs) prior for the mixing proportions.
+#' All methods default to a uniform 1/(# collections or RUs) prior for the mixing proportions.
 #'
 #' @param reference a dataframe of two-column genetic format data, proceeded by "repunit", "collection",
 #' and "indiv" columns. Does not need "sample_type" column, and will be overwritten if provided
@@ -20,6 +20,20 @@
 #' generating Dirichlet parameters for genotype likelihood calculations. Valid methods include
 #' \code{"const"}, \code{"scaled_const"}, and \code{"empirical"}. See \code{?list_diploid_params}
 #' for method details.
+#' @param pi_prior The prior to be added to the collection allocations, in order to generate pseudo-count
+#' Dirichlet parameters for the simulation of new pi vectors in MCMC. Default value of NA leads to the
+#' calculation of a symmetrical prior based on \code{pi_prior_sum}. To provide other values to
+#' certain collections, you can pass in a data frame with two columns, "collection"
+#' listing the relevant collection, and "pi_param" listing the desired prior for that collection.
+#' Specific priors may be listed for as few as one collection. The special collection name "DEFAULT_PI"
+#' is used to set the prior for all collections not explicitly listed; if no "DEFAULT_PI" is given, it is
+#' taken to be 1/(# collections).
+#' @param pi_init  The initial value to use for the mixing proportion of collections.  This lets
+#' the user start the chain from a specific value of the mixing proportion vector.  If pi_init is NULL
+#' (the default) then the mixing proportions are all initialized to be equal.  Otherwise, you pass
+#' in a data frame with one column named "collection" and the other named "pi_init".  Every value in the
+#' pi_init column must be strictly positive (> 0), and a value must be given for every collection.  If they sum
+#' to more than one the values will be normalized to sum to one.
 #' @param reps the number of iterations to be performed in MCMC
 #' @param burn_in how many reps to discard in the beginning of MCMC when doing the mean calculation.
 #' They will still be returned in the traces if desired.
@@ -27,7 +41,10 @@
 #' is 100.
 #' @param sample_int_Pi how many iterations between storing the mixing proportions trace. Default is 1.
 #' Can't be 0. Can't be so large that fewer than 10 samples are taken from the burn in and the sweeps.
-#'
+#' @param pi_prior_sum For \code{pi_prior = NA}, the prior on the mixing proportions is set
+#' as a Dirichlet vector of length C, with each element being W/C, where W is the pi_prior_sum
+#' and C is the number of collections. By default this is 1.  If it is made much smaller than 1, things
+#' could start to mix more poorly.
 #' @return Tidy data frames in a list with the following components:
 #' mixing_proportions: the estimated mixing proportions of the different collections.
 #' indiv_posteriors: the posterior probs of fish being from each of the collections.
@@ -47,15 +64,29 @@ infer_mixture <- function(reference,
                           gen_start_col,
                           method = "MCMC",
                           alle_freq_prior = list("const_scaled" = 1),
+                          pi_prior = NA,
+                          pi_init = NULL,
                           reps = 2000,
                           burn_in = 100,
                           pb_iter = 100,
-                          sample_int_Pi = 1) {
+                          sample_int_Pi = 1,
+                          pi_prior_sum = 1) {
 
   # check that reference and mixture are OK
-  check_refmix(reference, gen_start_col, "reference")
-  check_refmix(mixture, gen_start_col, "mixture")
+  ploidies_ref <- check_refmix(reference, gen_start_col, "reference")
+  ploidies_mix <- check_refmix(mixture, gen_start_col, "mixture")
 
+  ploidy_mismatch <- ploidies_ref != ploidies_mix
+  if (any(ploidy_mismatch)) {
+    stop("Ploidy mismatch in reference and mixture data sets at loci ", which(ploidy_mismatch))
+  }
+  ploidies <- ploidies_ref
+
+  # check that known_collections are OK if they exist
+  has_kc <- check_known_collections(reference, mixture)
+  if (method == "PB" & has_kc) {
+    stop("Sorry! Method PB not currently available with mixture individuals having known_collection.")
+  }
 
   # save an untouched version of reference and gen_start_col (to be used for self-assignment)
   orig_reference <- reference
@@ -98,6 +129,44 @@ infer_mixture <- function(reference,
   # till the end, when we join it on there
   mix_num_loci <- count_missing_data(mixture, orig_gen_start_col)
 
+  # Check for valid prior on pi
+  if(!(identical(pi_prior, NA))) {
+    if(any(is.na(pi_prior))) stop("Custom pi_prior vectors may not contain NA values")
+
+    if(is.numeric(pi_prior)) {
+      if(length(pi_prior) != length(unique(reference$collection))) stop("Length of numeric pi prior vector does not match number of collections in reference dataset")
+
+    } else if(is.data.frame(pi_prior)) {
+        if (!("collection") %in% names(pi_prior)) stop("Missing column \"collection\" in pi_prior")
+        if (!("pi_param") %in% names(pi_prior)) stop("Missing column \"pi_param\" in pi_prior")
+
+        valid_colls <- c(as.character(unique(reference$collection)), "DEFAULT_PI")
+        if(!(setequal(pi_prior$collection, intersect(pi_prior$collection, valid_colls)))) stop("Invalid collection name \"", setdiff(pi_prior$collection, intersect(pi_prior$collection, valid_colls)), "\" in pi_prior")
+
+    } else stop("pi_prior must be NA, a numeric vector, or a data frame")
+  }
+
+
+  # check to make sure pi_init is properly taken care of if non-null
+  if(!is.null(pi_init)) {
+    if (!("collection") %in% names(pi_init)) stop("Missing column \"collection\" in pi_init")
+    if (!("pi_init") %in% names(pi_init)) stop("Missing column \"pi_init\" in pi_init")
+    stopifnot(!duplicated(pi_init$collection)) # make sure no values are duplicated
+    stopifnot(all(pi_init$pi_init > 0))
+    all_colls <- as.character(unique(reference$collection))
+    not_in_pi_init <- setdiff(pi_init$collection, all_colls)
+    if(length(not_in_pi_init) > 0) stop("Missing these collections from pi_init collection column: ",
+                                        paste(not_in_pi_init, collapse = ", "))
+    in_pi_init_wrongly <- setdiff(all_colls, pi_init$collection)
+    if(length(in_pi_init_wrongly) > 0) stop("Missing these collections from pi_init collection column: ",
+                                        paste(in_pi_init_wrongly, collapse = ", "))
+
+    named_pi_init <- pi_init$pi_init
+    names(named_pi_init) <- pi_init$collection
+    named_pi_init <- named_pi_init / sum(named_pi_init)
+  } else {
+    named_pi_init <- NULL
+  }
 
   ## cleaning and summarizing data ##
   message("Collating data; compiling reference allele frequencies, etc.", appendLF = FALSE)
@@ -129,8 +198,10 @@ infer_mixture <- function(reference,
     colls_by_RU <- dplyr::filter(clean$clean_short, sample_type == "reference") %>%
       droplevels() %>%
       dplyr::count(repunit, collection) %>%
-      dplyr::select(-n) %>%
-      dplyr::ungroup()
+      dplyr::ungroup() %>%
+      dplyr::filter(n > 0) %>% # this is now necessary for the new dplyr that counts zeroes in factor combinations
+      dplyr::select(-n)
+
 
     # here we want to get a tibble of the collection names in the order in which
     # they occur in the reference once it is squashed down.  This is the levels of reference$collection
@@ -165,6 +236,8 @@ infer_mixture <- function(reference,
 
     # and then make a params structure for doing the self-assignment to get the z-scores
     sa_params <- list_diploid_params(ac, ref_I, ref_PO, coll_N, RU_vec, RU_starts, alle_freq_prior = alle_freq_prior)
+    sa_params$locus_names <- names(ac)
+    sa_params$ploidies <- as.integer(unname(ploidies[sa_params$locus_names]))
 
   }) # close time 1 block
   message("   time: ", sprintf("%.2f", time1["elapsed"]), " seconds")
@@ -210,7 +283,19 @@ infer_mixture <- function(reference,
 
 
     params <- list_diploid_params(ac, mix_I, coll, coll_N, RU_vec, RU_starts, alle_freq_prior = alle_freq_prior)
+    params$locus_names <- names(ac)
+    params$ploidies <- as.integer(unname(ploidies[params$locus_names]))
 
+    ## create priors on pi, if no non-default priors are submitted
+    if(identical(pi_prior, NA)) {
+      lambda <- rep(pi_prior_sum / params$C, params$C)
+    } else {
+      if(is.numeric(pi_prior)) {
+        lambda <- pi_prior
+      } else {
+        lambda <- custom_pi_prior(P = pi_prior, C = data.frame(collection = colnames(ac[[1]])))
+      }
+    }
 
     ## calculate genotype log-Likelihoods for the mixture individuals ##
     message("  calculating log-likelihoods of the mixture individuals.", appendLF = FALSE)
@@ -240,6 +325,17 @@ infer_mixture <- function(reference,
                                     expected_var = base::as.vector(mv_sums$var))
 
 
+      # here is where we will modify the SL matrix to reflect the fish of known origin in the mixture
+      # first get the levels of the collections in the reference
+      CFL <- clean$clean_short %>%
+        dplyr::filter(sample_type == "reference") %>%
+        .$collection %>%
+        droplevels() %>%
+        levels()
+
+      KC <- little_mix[["known_collection"]]
+
+      SL <- modify_scaled_likelihoods_for_known_mixture_fish(SL = SL, KC = KC, CFL = CFL)
 
     })
     message("   time: ", sprintf("%.2f", time2["elapsed"]), " seconds")
@@ -248,10 +344,18 @@ infer_mixture <- function(reference,
 
     ## regardless of whether the method is PB or MCMC, you are going to run the MCMC once, at least ##
     message("  performing ", burn_in, " burn-in and ", reps, " more sweeps of method \"MCMC\"", appendLF = FALSE)
+
+    # deal with initializing pi
+    if(!is.null(named_pi_init)) {
+      pi_init_to_use <- named_pi_init[colnames(ac[[1]])]
+    } else {
+      pi_init_to_use <- rep(1 / params$C, params$C)
+    }
+
     time_mcmc1 <- system.time({
       out <- gsi_mcmc_1(SL = SL,
-                        Pi_init = rep(1 / params$C, params$C),
-                        lambda = rep(1 / params$C, params$C),
+                        Pi_init = pi_init_to_use,
+                        lambda = lambda,
                         reps = reps,
                         burn_in = burn_in,
                         sample_int_Pi = sample_int_Pi,
@@ -294,7 +398,9 @@ infer_mixture <- function(reference,
                                   gen_start_col = gen_start_col,
                                   niter = pb_iter,
                                   reps = reps,
-                                  burn_in = burn_in)
+                                  burn_in = burn_in,
+                                  pi_prior = pi_prior,
+                                  pi_prior_sum = pi_prior_sum)
 
         out$mean$bootstrap_rho <- boot_out
       })

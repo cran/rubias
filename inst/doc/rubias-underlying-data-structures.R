@@ -3,11 +3,11 @@ knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
-library(tidyverse)
 library(rubias)
 
 ## ------------------------------------------------------------------------
-cpar <- tcf2param_list(chinook, 5, summ = FALSE)
+ploidies <- check_refmix(chinook, 5)
+cpar <- tcf2param_list(chinook, 5, summ = FALSE, ploidies = ploidies)
 cpar$RU_starts[1:5]
 
 ## ------------------------------------------------------------------------

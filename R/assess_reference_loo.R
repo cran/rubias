@@ -52,7 +52,7 @@ assess_reference_loo <- function(reference, gen_start_col, reps = 50, mixsize = 
   if (!(resampling_unit %in% c("gene_copies", "individual"))) stop("Choice ", resampling_unit, " unknown for resampling unit.")
 
   # check that reference is formatted OK
-  check_refmix(reference, gen_start_col, "reference")
+  ploidies <- check_refmix(reference, gen_start_col, "reference")
 
   # then coerce those repunit and collection to factor to prepare them for tcf2param_list
   reference$repunit <- factor(reference$repunit, levels = unique(reference$repunit))
@@ -60,13 +60,14 @@ assess_reference_loo <- function(reference, gen_start_col, reps = 50, mixsize = 
 
 
   # get the necessary parameters from the reference data
-  params <- tcf2param_list(reference, gen_start_col, summ = printSummary, alle_freq_prior = alle_freq_prior)
+  params <- tcf2param_list(reference, gen_start_col, summ = printSummary, alle_freq_prior = alle_freq_prior, ploidies = ploidies)
 
   # get a data frame that has the repunits and collections
   reps_and_colls <- reference %>%
     dplyr::group_by(repunit, collection) %>%
     dplyr::tally() %>%
     dplyr::ungroup() %>%
+    dplyr::filter(n > 0) %>%
     dplyr::select(-n)
 
   # set seed
@@ -189,7 +190,7 @@ assess_reference_loo <- function(reference, gen_start_col, reps = 50, mixsize = 
 
       if(return_indiv_posteriors == TRUE) {
         # put mixing proportions in a data_frame
-        mix_prop <- dplyr::data_frame(collection = levels(reference$collection),
+        mix_prop <- tibble::tibble(collection = levels(reference$collection),
                                       post_mean = pi_out$mean$pi,
                                       mle = em_out$pi)
         # put PofZ in a dataframe with collection names
@@ -209,7 +210,7 @@ assess_reference_loo <- function(reference, gen_start_col, reps = 50, mixsize = 
 
       } else {
         # put only mixing proportions in a data_frame, and return
-        dplyr::data_frame(collection = levels(reference$collection),
+        tibble::tibble(collection = levels(reference$collection),
                                       post_mean = pi_out$mean$pi,
                                       mle = em_out$pi)
         }

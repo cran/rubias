@@ -77,6 +77,10 @@ ref_and_mix_pipeline <- function(reference, mixture, gen_start_col, method = "MC
   D <- cbind(sample_type, D)
   gen_start_col <- gen_start_col + 1
 
+  # infer the ploidies
+  ploidies <- get_ploidy_from_frame(D[gen_start_col:ncol(D)])
+
+
   # clean the data, gather allele count matrices and collection/reporting unit groups from reference data,
   # then prepare other parameters based on the mixture data
   clean <- tcf2long(D, gen_start_col)
@@ -88,6 +92,8 @@ ref_and_mix_pipeline <- function(reference, mixture, gen_start_col, method = "MC
   colls_by_RU <- dplyr::filter(clean$clean_short, sample_type == "reference") %>%
     droplevels() %>%
     dplyr::count(repunit, collection) %>%
+    dplyr::ungroup() %>%
+    dplyr::filter(n > 0) %>%
     dplyr::select(-n)
   PC <- rep(0, length(unique(colls_by_RU$repunit)))
   for (i in 1:nrow(colls_by_RU)) {
@@ -97,6 +103,8 @@ ref_and_mix_pipeline <- function(reference, mixture, gen_start_col, method = "MC
   RU_vec <- as.integer(colls_by_RU$collection)
   names(RU_vec) <- as.character(colls_by_RU$collection)
   params <- list_diploid_params(ac, mix_I, coll, coll_N, RU_vec, RU_starts)
+  params$locus_names <- names(ac)
+  params$ploidies <- as.integer(unname(ploidies[params$locus_names]))
 
 
   # calculate genotype log-Likelihoods for the mixture individuals
@@ -108,10 +116,14 @@ ref_and_mix_pipeline <- function(reference, mixture, gen_start_col, method = "MC
   ref_coll <- as.integer(factor(reference$collection,
                                 levels = unique(reference$collection)))
   ref_coll_N <- dplyr::count(reference, collection) %>%
+    dplyr::filter(n > 0) %>%
     dplyr::select(n) %>%
     simplify2array() %>%
     as.vector()
+
   ref_self_params <- list_diploid_params(ac, ref_I, ref_coll, ref_coll_N, RU_vec, RU_starts)
+  ref_self_params$ploidies <- as.integer(unname(ploidies[params$locus_names]))
+
   ref_logl <- geno_logL(ref_self_params)
   ref_SL <- apply(exp(ref_logl), 2, function(x) x/sum(x))
   ref_correctassign <- avg_coll2correctRU(ref_SL,
@@ -188,6 +200,12 @@ Hasselman_sim_colls <- function(RU_starts, RU_vec, size = 100) {
 #' and "indiv" columns
 #' @param gen_start_col the first column of genetic data in D. All columns after
 #' \code{gen_start_col} must be genetic data
+#' @param pi_prior The prior to be added to the collection allocations, in order
+#' to generate pseudo-count Dirichlet parameters for the simulation of a new pi vector.
+#' Non-default values should be a vector of length equal to the number of populations
+#' in the reference dataset. Default value of NA leads to the
+#' calculation of a symmetrical prior based on \code{pi_prior_sum}.
+#' @param pi_prior_sum total weight on default symmetrical prior for pi.
 #'
 #' In parametric bootstrapping, \code{niter} new mixture datasets are simulated by
 #' individual from the reference with reporting unit proportions \code{rho_est},
@@ -200,7 +218,11 @@ Hasselman_sim_colls <- function(RU_starts, RU_vec, size = 100) {
 #' bootstrapping.
 #' @export
 #' @keywords internal
-bootstrap_rho <- function(rho_est, pi_est, D, gen_start_col, niter = 100, reps = 2000, burn_in = 100) {
+bootstrap_rho <- function(rho_est, pi_est, D, gen_start_col, niter = 100, reps = 2000, burn_in = 100, pi_prior = NA, pi_prior_sum = 1) {
+
+  # do this to get the ploidies of the loci
+  ploidies <- check_refmix(D, gen_start_col)
+
   D$collection <- factor(D$collection, levels = unique(D$collection))
   D$repunit <- factor(D$repunit, levels = unique(D$repunit))
   ref <- dplyr::filter(D, sample_type == "reference")
@@ -211,7 +233,18 @@ bootstrap_rho <- function(rho_est, pi_est, D, gen_start_col, niter = 100, reps =
     dplyr::group_by(repunit, coll_int) %>%
     dplyr::tally()
 
-  ref_star_params <- tcf2param_list(D, gen_start_col, samp_type = "reference", summ = F)
+  ref_star_params <- tcf2param_list(D, gen_start_col, samp_type = "reference", summ = F, ploidies = ploidies)
+
+  ## create symmetrical priors on pi, if no non-default priors are submitted
+  if(identical(pi_prior, NA)) {
+    lambda <- rep(pi_prior_sum / ref_star_params$C, ref_star_params$C)
+  } else lambda <- pi_prior
+  if(identical(pi_prior, NA)) {
+    lambda <- rep(pi_prior_sum / ref_star_params$C, ref_star_params$C)
+  } else if(is.numeric(pi_prior)) lambda <- pi_prior
+  else lambda <- custom_pi_prior(P = pi_prior, C = data.frame(collection = unique(D$collection)))
+
+
   rho_mean <- lapply(1:niter, function(rep) {
     sim_ns <- rmultinom(n = 1, size = nrow(mix), prob = pi_est)
     sim_colls <- lapply(1:length(sim_ns), function(coll){
@@ -222,7 +255,7 @@ bootstrap_rho <- function(rho_est, pi_est, D, gen_start_col, niter = 100, reps =
     SL <- apply(exp(sim_inds), 2, function(x) x/sum(x))
     pi_pb <- gsi_mcmc_1(SL = SL,
                         Pi_init = rep(1 / ref_star_params$C, ref_star_params$C),
-                        lambda = rep(1 / ref_star_params$C, ref_star_params$C),
+                        lambda = lambda,
                         reps = reps,
                         burn_in = burn_in,
                         sample_int_Pi = 0,

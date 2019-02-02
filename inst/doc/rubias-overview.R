@@ -4,13 +4,58 @@ knitr::opts_chunk$set(
   fig.height = 5
 )
 
-## ----head-chinook--------------------------------------------------------
+## ---- eval=FALSE---------------------------------------------------------
+#  library(rubias)
+#  library(tidyverse)
+
+## ---- echo=FALSE---------------------------------------------------------
+# this is what we actually evaluate.
 library(rubias)
-library(tidyverse)
+
+# all the following libraries can be loaded with "library(tidyverse)"
+# but then you have to put tidyverse in the Suggests because this is
+# in the vignette, and that is bad practice, so, load the packages separately...
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+
+## ----head-chinook--------------------------------------------------------
 head(chinook[, 1:8])
 
 ## ----head-chinook-mix----------------------------------------------------
 head(chinook_mix[, 1:8])
+
+## ------------------------------------------------------------------------
+# combine chinook and chinook_mix into one big data frame,
+# but drop the California_Coho collection because Coho all
+# have pretty much the same genotype at these loci!
+chinook_all <- bind_rows(chinook, chinook_mix) %>%
+  filter(collection != "California_Coho")
+
+# then toss them into a function.  This takes half a minute or so...
+matchy_pairs <- close_matching_samples(D = chinook_all, 
+                                       gen_start_col = 5, 
+                                       min_frac_non_miss = 0.85, 
+                                       min_frac_matching = 0.94
+                                       )
+
+# see that that looks like:
+matchy_pairs %>%
+  arrange(desc(num_non_miss), desc(num_match))
+
+## ------------------------------------------------------------------------
+# then toss them into a function.  This takes half a minute or so...
+matchy_pairs2 <- close_matching_samples(D = chinook_all, 
+                                       gen_start_col = 5, 
+                                       min_frac_non_miss = 0.85, 
+                                       min_frac_matching = 0.85
+                                       )
+
+# see that that looks like:
+matchy_pairs2 %>%
+  arrange(desc(num_non_miss), desc(num_match))
 
 ## ----infer_mixture1------------------------------------------------------
 mix_est <- infer_mixture(reference = chinook, 
@@ -19,6 +64,48 @@ mix_est <- infer_mixture(reference = chinook,
 
 ## ----look-at-mix-est-----------------------------------------------------
 lapply(mix_est, head)
+
+## ------------------------------------------------------------------------
+prior_tibble <- chinook %>%
+  count(repunit, collection) %>%
+  filter(repunit == "CentralValleyfa") %>%
+  select(collection) %>%
+  mutate(pi_param = 2)
+
+# see what it looks like:
+prior_tibble
+
+## ------------------------------------------------------------------------
+set.seed(12)
+mix_est_with_prior <- infer_mixture(reference = chinook, 
+                         mixture = chinook_mix, 
+                         gen_start_col = 5,
+                         pi_prior = prior_tibble)
+
+## ------------------------------------------------------------------------
+comp_mix_ests <- list(
+  `pi (default prior)` = mix_est$mixing_proportions,
+  `pi (cv fall gets 2s prior)` = mix_est_with_prior$mixing_proportions
+) %>%
+  bind_rows(.id = "prior_type") %>%
+  filter(mixture_collection == "rec1") %>%
+  select(prior_type, repunit, collection, pi) %>%
+  spread(prior_type, pi) %>%
+  mutate(coll_group = ifelse(repunit == "CentralValleyfa", "CV_fall", "Not_CV_fall"))
+
+ggplot(comp_mix_ests, 
+       aes(x = `pi (default prior)`, 
+           y = `pi (cv fall gets 2s prior)`,
+           colour = coll_group
+           )) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed")
+
+## ------------------------------------------------------------------------
+comp_mix_ests %>% 
+  group_by(coll_group) %>% 
+  summarise(with_explicit_prior = sum(`pi (cv fall gets 2s prior)`), 
+            with_default_prior = sum(`pi (default prior)`))
 
 ## ----aggregating---------------------------------------------------------
 # for mixing proportions
@@ -75,6 +162,40 @@ normo <- tibble(z_score = rnorm(1e06))
 ggplot(map_rows, aes(x = z_score)) +
   geom_density(colour = "blue") +
   geom_density(data = normo, colour = "black")
+
+## ------------------------------------------------------------------------
+no_kc <- infer_mixture(small_chinook_ref, small_chinook_mix, gen_start_col = 5)
+
+## ------------------------------------------------------------------------
+no_kc$mixing_proportions %>% 
+  arrange(mixture_collection, desc(pi))
+
+## ------------------------------------------------------------------------
+# make reference file that includes the known_collection column
+kc_ref <- small_chinook_ref %>%
+  mutate(known_collection = collection) %>%
+  select(known_collection, everything())
+
+# see what that looks like
+kc_ref[1:10, 1:8]
+
+## ------------------------------------------------------------------------
+kc_mix <- small_chinook_mix %>%
+  mutate(known_collection = NA) %>%
+  select(known_collection, everything())
+
+kc_mix$known_collection[kc_mix$collection == "rec1"][1:8] <- "Deer_Cr_sp"
+
+# here is what that looks like now (dropping most of the genetic data columns)
+kc_mix[1:20, 1:7]
+
+## ------------------------------------------------------------------------
+# note that the genetic data start in column 6 now
+with_kc <- infer_mixture(kc_ref, kc_mix, 6)
+
+## ------------------------------------------------------------------------
+with_kc$mixing_proportions %>% 
+  arrange(mixture_collection, desc(pi))
 
 ## ----self-ass------------------------------------------------------------
 sa_chinook <- self_assign(reference = chinook, gen_start_col = 5)

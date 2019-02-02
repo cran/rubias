@@ -4,7 +4,8 @@
 \alias{gsi_mcmc_1}
 \title{MCMC from the simplest GSI model for pi and the individual posterior probabilities}
 \usage{
-gsi_mcmc_1(SL, Pi_init, lambda, reps, burn_in, sample_int_Pi, sample_int_PofZ)
+gsi_mcmc_1(SL, Pi_init, lambda, reps, burn_in, sample_int_Pi,
+  sample_int_PofZ)
 }
 \arguments{
 \item{SL}{matrix of the scaled likelihoods.  This is should have values for each individual in a column
@@ -41,7 +42,13 @@ for all the individuals.  It returns the output in a list.
 \examples{
 # this demonstrates it with scaled likelihoods computed from
 # assignment of the reference samples
-params <- tcf2param_list(alewife, 17)
+
+# we have to get the ploidies to pass to tcf2param_list
+locnames <- names(alewife)[-(1:16)][c(TRUE, FALSE)]
+ploidies <- rep(2, length(locnames))
+names(ploidies) <- locnames
+
+params <- tcf2param_list(alewife, 17, ploidies = ploidies)
 logl <- geno_logL(params)
 SL <- apply(exp(logl), 2, function(x) x/sum(x))
 lambda <- rep(1/params$C, params$C)

@@ -43,6 +43,7 @@ NumericMatrix gprob_sim_gc(List par_list, IntegerVector sim_colls) {
   IntegerVector sum_AC = as<IntegerVector>(par_list["sum_AC"]);
   IntegerVector A = as<IntegerVector>(par_list["A"]);
   IntegerVector CA = as<IntegerVector>(par_list["CA"]);
+  IntegerVector PLOID = as<IntegerVector>(par_list["ploidies"]);
   NumericVector DP = as<NumericVector>(par_list["DP"]);
   NumericVector sum_DP = as<NumericVector>(par_list["sum_DP"]);
   double cumul, rando, sum, gp;
@@ -82,7 +83,7 @@ NumericMatrix gprob_sim_gc(List par_list, IntegerVector sim_colls) {
         sum = 0.0;
         LOO = c == (sim_colls[i]-1);
         for(l = 0; l < L; l++) {
-          GPROB_DIP_FROM_SIM(a1_vec[l], a2_vec[l], l, c, gp);
+          GPROB_FROM_SIM(a1_vec[l], a2_vec[l], l, c, gp);
           sum += log(gp);
         }
         out(c, i) = sum;
@@ -134,6 +135,7 @@ NumericMatrix gprob_sim_ind(List par_list, IntegerVector sim_colls) {
   IntegerVector I_coll = as<IntegerVector>(par_list["coll"]);
   IntegerVector A = as<IntegerVector>(par_list["A"]);
   IntegerVector CA = as<IntegerVector>(par_list["CA"]);
+  IntegerVector PLOID = as<IntegerVector>(par_list["ploidies"]);
   NumericVector DP = as<NumericVector>(par_list["DP"]);
   NumericVector sum_DP = as<NumericVector>(par_list["sum_DP"]);
   double sum, gp;
@@ -160,7 +162,7 @@ NumericMatrix gprob_sim_ind(List par_list, IntegerVector sim_colls) {
       sum = 0.0;
       LOO = c == (sim_colls[i]-1);
       for(l = 0; l < L; l++) {
-        GPROB_DIP_FROM_SIM(a1_vec[l], a2_vec[l], l, c, gp);
+        GPROB_FROM_SIM(a1_vec[l], a2_vec[l], l, c, gp);
         sum += log(gp);
       }
       out(c, i) = sum;
@@ -202,7 +204,11 @@ NumericMatrix gprob_sim_ind(List par_list, IntegerVector sim_colls) {
 //' mix <- drawn$mix
 //'
 //' # then run it...
-//' params <- tcf2param_list(rbind(ref,mix), 17, samp_type = "mixture")
+//' # we have to get the ploidies to pass to tcf2param_list
+//' locnames <- names(alewife)[-(1:16)][c(TRUE, FALSE)]
+//' ploidies <- rep(2, length(locnames))
+//' names(ploidies) <- locnames
+//' params <- tcf2param_list(rbind(ref,mix), 17, samp_type = "mixture", ploidies = ploidies)
 //' sim_colls <- sample(params$C, 1070, replace = TRUE)
 //' sim_miss <- sample(length(params$coll), 1070, replace = TRUE)
 //' ale_sim_gprobs_miss <- gprob_sim_gc_missing(params, sim_colls, sim_miss)
@@ -223,6 +229,7 @@ NumericMatrix gprob_sim_gc_missing(List par_list, IntegerVector sim_colls, Integ
   IntegerVector sum_AC = as<IntegerVector>(par_list["sum_AC"]);
   IntegerVector A = as<IntegerVector>(par_list["A"]);
   IntegerVector CA = as<IntegerVector>(par_list["CA"]);
+  IntegerVector PLOID = as<IntegerVector>(par_list["ploidies"]);
   NumericVector DP = as<NumericVector>(par_list["DP"]);
   NumericVector sum_DP = as<NumericVector>(par_list["sum_DP"]);
   double cumul, rando, sum, gp;
@@ -270,7 +277,7 @@ NumericMatrix gprob_sim_gc_missing(List par_list, IntegerVector sim_colls, Integ
       sum = 0.0;
       LOO = c == (sim_colls[i]-1);
       for(l = 0; l < L; l++) {
-        GPROB_DIP_FROM_SIM(a1_vec[l], a2_vec[l], l, c, gp);
+        GPROB_FROM_SIM(a1_vec[l], a2_vec[l], l, c, gp);
         sum += log(gp);
       }
       out(c, i) = sum;

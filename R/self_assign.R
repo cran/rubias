@@ -19,10 +19,10 @@ self_assign <- function(reference, gen_start_col, preCompiledParams = NULL,
   # if not supplying it with preCompiledParams, check reference and get the params
   if (is.null(preCompiledParams)) {
     # make sure the reference file is OK
-    check_refmix(reference, gen_start_col, "reference")
+    ploidies <- check_refmix(reference, gen_start_col, "reference")
 
     # get the necessary parameters from the reference data
-    params <- tcf2param_list(reference, gen_start_col, summ = T, alle_freq_prior = alle_freq_prior)
+    params <- tcf2param_list(reference, gen_start_col, summ = T, alle_freq_prior = alle_freq_prior, ploidies = ploidies)
   } else {
     # otherwise, assume the reference was checked elsewhere (i.e. in infer_mixture())
     # and just set params to preCompiledParams
@@ -73,8 +73,9 @@ self_assign <- function(reference, gen_start_col, preCompiledParams = NULL,
   # this ugly thing just gets a tibble that associates repunits with collections
   repu_assoc <- result %>%
     dplyr::count(collection, repunit) %>%
-    dplyr::select(-n) %>%
     dplyr::ungroup() %>%
+    dplyr::filter(n > 0) %>%
+    dplyr::select(-n) %>%
     dplyr::rename(inferred_collection = collection,
                   inferred_repunit = repunit)
 

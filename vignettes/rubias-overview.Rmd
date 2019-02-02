@@ -74,14 +74,46 @@ in, and it is assumed that all the columns after that one contain genetic data.
 same column structure, i.e., they must have exactly the same number of columns with exactly the same
 column names, in the same order and of the same type.
 
+## How about haploid markers?
+
+At the request of the good folks at ADFG, I introduced a few hacks to allow the input to 
+include markers that are haploid (for example mtDNA haplotypes).  To denote a marker as haploid
+you _still give it two columns of data_ in your data frame, but the second column of the haploid
+marker must be entirely NAs.  When `rubias` is processing the data and it sees this, it assumes that
+the marker is haploid and it treats it appropriately.
+
+Note that if you have a diploid marker it typically does not make sense to mark one of the gene copies as
+missing and the other as non-missing.  Accordingly, if you have a diploid marker that records just one of the
+gene copies as missing in any individual, it is going to throw an error.  Likewise, if your haploid marker does
+not have every single individual with and NA at the second gene copy, then it's also going to throw an error.
+
 
 ## An example reference data file
+
+
+Load our packages first:
+```{r, eval=FALSE}
+library(rubias)
+library(tidyverse)
+```
+
+```{r, echo=FALSE}
+# this is what we actually evaluate.
+library(rubias)
+
+# all the following libraries can be loaded with "library(tidyverse)"
+# but then you have to put tidyverse in the Suggests because this is
+# in the vignette, and that is bad practice, so, load the packages separately...
+library(tibble)
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+```
 
 Here are the meta data columns and the first two loci for eight individuals in the `chinook` reference data set that comes with the 
 package:
 ```{r head-chinook}
-library(rubias)
-library(tidyverse)
 head(chinook[, 1:8])
 ```
 
@@ -91,6 +123,81 @@ Here is the same for the mixture data frame that goes along with that reference 
 ```{r head-chinook-mix}
 head(chinook_mix[, 1:8])
 ```
+
+
+## Preliminary good practice --- check for duplicate individuals
+
+Sometimes, for a variety of reasons, an individual's genotype might appear more than once in a data
+set.  `rubias` has a quick and dirty function to spot pairs of individuals that share a large number of 
+genotypes.  Clearly you only want to look at pairs that don't have a whole lot of missing data, so one
+parameter is the fraction of loci that are non-missing in either fish. In our experience with Fluidigm
+assays, if a fish is missing at > 10% of the SNPs, the remaining genotypes are likely to have
+a fairly high error rate.  So, to look for matching samples, let's require 85% of the genotypes
+to be non-missing in both members of the pair.  The last parameter is the
+fraction of non-missing loci at which the pair has the same genotype.  We will set that to 0.94 first.
+Here we see it in action:
+```{r}
+# combine chinook and chinook_mix into one big data frame,
+# but drop the California_Coho collection because Coho all
+# have pretty much the same genotype at these loci!
+chinook_all <- bind_rows(chinook, chinook_mix) %>%
+  filter(collection != "California_Coho")
+
+# then toss them into a function.  This takes half a minute or so...
+matchy_pairs <- close_matching_samples(D = chinook_all, 
+                                       gen_start_col = 5, 
+                                       min_frac_non_miss = 0.85, 
+                                       min_frac_matching = 0.94
+                                       )
+
+# see that that looks like:
+matchy_pairs %>%
+  arrange(desc(num_non_miss), desc(num_match))
+```
+
+Check that out.  This reveals 33 pairs in the data set that are likely duplicate
+samples.  
+
+If we reduce the min_frac_matching, we get more matches, but these are very unlikely
+to be the same individual, unless genotyping error rates are very high.  
+```{r}
+# then toss them into a function.  This takes half a minute or so...
+matchy_pairs2 <- close_matching_samples(D = chinook_all, 
+                                       gen_start_col = 5, 
+                                       min_frac_non_miss = 0.85, 
+                                       min_frac_matching = 0.85
+                                       )
+
+# see that that looks like:
+matchy_pairs2 %>%
+  arrange(desc(num_non_miss), desc(num_match))
+```
+A more principled approach would be to use the allele frequencies in each collection
+and take a likelihood based approach, but this is adequate for finding obvious duplicates.
+
+
+
+## How about known-origin individuals in the mixture?
+
+In some cases, you might know (more or less unambiguously) the origin of some fish
+in a particular mixture sample.  For example, if 10% of the individuals in a mixture
+carried coded wire tags, then you would want to include them in the sample, but 
+make sure that their collections of origin were hard-coded to be what the CWTs said.
+Another scenario in which this might occur is when the genetic data were used for parentage-based
+tagging of the individuals in the mixture sample.  In that case, some individuals might be placed
+with very high confidence to parents.  Then, they should be included in the mixture as having come
+from a known collection.  The folks at the DFO in Nanaimo, Canada are doing an amazing
+job with PBT and wondered if rubias could be modified to deal with the latter situation.
+
+We've made some small additions to accommodate this.  rubias does not do any actual inference of parentage, but if you
+know the origin of some fish in the mixture, that can be included in the rubias analysis. The way you do this with
+the function `infer_mixture()` is to include a column called `known_collection` in both the reference data frame
+and the mixture data frame.  In the reference data frame, `known_collection` should just be a copy of the `collection` column.  However, in the mixture data frame each entry in `known_collection` should be the collection that the individual is known to be from (i.e. using parentage inference or a CWT), or, if the individual is not known
+to be from any collection, it should be NA.  Note that the names of the collections in `known_collection` must match
+those found in the `collection` column in the reference data set.
+
+These modifications are not allowed for the parametric bootstrap (PB) method in `infer_mixture()`.
+
 
 
 # Performing a Genetic Mixture Analysis
@@ -128,6 +235,73 @@ These data frames look like this:
 lapply(mix_est, head)
 ```
 
+
+## Setting the prior for the mixing proportions
+
+In some cases there might be a reason to explicitly set the parameters of the
+Dirichlet prior on the mixing proportions of the collections.  For a contrived example,
+we could imagine that we wanted a Dirichlet prior with all parameters equal to 
+1/(# of collections), except for the parameters for all the Central Valley Fall Run
+populations, to which we would like to assign Dirichlet parameters of 2.  That can be 
+accomplished with the `pi_prior` argument to the `infer_mixture()` function,
+which will let you pass in a tibble in which 
+one column named "collection" gives the collection, and the other column, named "pi_param"
+gives the desired parameter.  
+
+Here we construct that kind of input:
+```{r}
+prior_tibble <- chinook %>%
+  count(repunit, collection) %>%
+  filter(repunit == "CentralValleyfa") %>%
+  select(collection) %>%
+  mutate(pi_param = 2)
+
+# see what it looks like:
+prior_tibble
+```
+
+Then we can run that in infer_mixture():
+```{r}
+set.seed(12)
+mix_est_with_prior <- infer_mixture(reference = chinook, 
+                         mixture = chinook_mix, 
+                         gen_start_col = 5,
+                         pi_prior = prior_tibble)
+```
+
+and now, for fun, we can compare the results for the mixing proportions of different collections
+there with and without the prior for the mixture collection rec1:
+```{r}
+comp_mix_ests <- list(
+  `pi (default prior)` = mix_est$mixing_proportions,
+  `pi (cv fall gets 2s prior)` = mix_est_with_prior$mixing_proportions
+) %>%
+  bind_rows(.id = "prior_type") %>%
+  filter(mixture_collection == "rec1") %>%
+  select(prior_type, repunit, collection, pi) %>%
+  spread(prior_type, pi) %>%
+  mutate(coll_group = ifelse(repunit == "CentralValleyfa", "CV_fall", "Not_CV_fall"))
+
+ggplot(comp_mix_ests, 
+       aes(x = `pi (default prior)`, 
+           y = `pi (cv fall gets 2s prior)`,
+           colour = coll_group
+           )) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed")
+```
+
+Yep, slightly different than before.  Let's look at the sums of everything:
+```{r}
+comp_mix_ests %>% 
+  group_by(coll_group) %>% 
+  summarise(with_explicit_prior = sum(`pi (cv fall gets 2s prior)`), 
+            with_default_prior = sum(`pi (default prior)`))
+```
+
+We see that for the most part this change to the prior changed the distribution of
+fish into different collections within the Central Valley Fall reporting unit.  This 
+is not suprising---it is very hard to tell apart fish from those different collections.  However, it did not greatly change the estimated proportion of the whole reporting unit.  This also turns out to make sense if you consider the effect that the extra weight in the prior will have.  
 
 ## Aggregating collections into reporting units
 
@@ -244,6 +418,66 @@ z-score to the maximum-a-posteriori population for an individual
 in your mixture sample  that is considerably less than z_scores you saw in the reference,
 then you might infer that the individual doesn't actually fit any of the 
 populations in the reference well.
+
+
+## Individuals of known origin in the mixture
+
+Here I include a small, contrived example.  We use the `small_chinook` data set so that it goes
+fast.
+
+First, we analyze the data with no fish in the mixture of known collection
+```{r}
+no_kc <- infer_mixture(small_chinook_ref, small_chinook_mix, gen_start_col = 5)
+```
+And look at the results for the mixing proportions:
+```{r}
+no_kc$mixing_proportions %>% 
+  arrange(mixture_collection, desc(pi))
+```
+
+Now, we will do the same analysis, but pretend that we know that the first 8 of the 36
+fish in fishery rec1 are from the Deer_Cr_sp collection.
+
+First we have to add the known_collection column to the reference.
+
+```{r}
+# make reference file that includes the known_collection column
+kc_ref <- small_chinook_ref %>%
+  mutate(known_collection = collection) %>%
+  select(known_collection, everything())
+
+# see what that looks like
+kc_ref[1:10, 1:8]
+```
+
+Then we add the known collection column to the mixture.  We start out making it all NAs, and
+then we change that to Deer_Cr_sp for 8 of the rec1 fish:
+```{r}
+kc_mix <- small_chinook_mix %>%
+  mutate(known_collection = NA) %>%
+  select(known_collection, everything())
+
+kc_mix$known_collection[kc_mix$collection == "rec1"][1:8] <- "Deer_Cr_sp"
+
+# here is what that looks like now (dropping most of the genetic data columns)
+kc_mix[1:20, 1:7]
+```
+
+And now we can do the mixture analysis:
+```{r}
+# note that the genetic data start in column 6 now
+with_kc <- infer_mixture(kc_ref, kc_mix, 6)
+```
+
+And, when we look at the estimated proportions, we see that for rec1 they reflect
+the fact that 8 of those fish were singled out as known fish from Deer_Ck_sp:
+```{r}
+with_kc$mixing_proportions %>% 
+  arrange(mixture_collection, desc(pi))
+```
+
+The output from `infer_mixture()` in this case can be used just like it was before
+without known individuals in the baseline.
 
 
 # Assessment of Genetic References

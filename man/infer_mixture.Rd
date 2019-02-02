@@ -5,8 +5,9 @@
 \title{Estimate mixing proportions and origin probabilities from one or several mixtures}
 \usage{
 infer_mixture(reference, mixture, gen_start_col, method = "MCMC",
-  alle_freq_prior = list(const_scaled = 1), reps = 2000, burn_in = 100,
-  pb_iter = 100, sample_int_Pi = 1)
+  alle_freq_prior = list(const_scaled = 1), pi_prior = NA,
+  pi_init = NULL, reps = 2000, burn_in = 100, pb_iter = 100,
+  sample_int_Pi = 1, pi_prior_sum = 1)
 }
 \arguments{
 \item{reference}{a dataframe of two-column genetic format data, proceeded by "repunit", "collection",
@@ -25,6 +26,22 @@ generating Dirichlet parameters for genotype likelihood calculations. Valid meth
 \code{"const"}, \code{"scaled_const"}, and \code{"empirical"}. See \code{?list_diploid_params}
 for method details.}
 
+\item{pi_prior}{The prior to be added to the collection allocations, in order to generate pseudo-count
+Dirichlet parameters for the simulation of new pi vectors in MCMC. Default value of NA leads to the
+calculation of a symmetrical prior based on \code{pi_prior_sum}. To provide other values to
+certain collections, you can pass in a data frame with two columns, "collection"
+listing the relevant collection, and "pi_param" listing the desired prior for that collection.
+Specific priors may be listed for as few as one collection. The special collection name "DEFAULT_PI"
+is used to set the prior for all collections not explicitly listed; if no "DEFAULT_PI" is given, it is
+taken to be 1/(# collections).}
+
+\item{pi_init}{The initial value to use for the mixing proportion of collections.  This lets
+the user start the chain from a specific value of the mixing proportion vector.  If pi_init is NULL
+(the default) then the mixing proportions are all initialized to be equal.  Otherwise, you pass
+in a data frame with one column named "collection" and the other named "pi_init".  Every value in the
+pi_init column must be strictly positive (> 0), and a value must be given for every collection.  If they sum
+to more than one the values will be normalized to sum to one.}
+
 \item{reps}{the number of iterations to be performed in MCMC}
 
 \item{burn_in}{how many reps to discard in the beginning of MCMC when doing the mean calculation.
@@ -35,6 +52,11 @@ is 100.}
 
 \item{sample_int_Pi}{how many iterations between storing the mixing proportions trace. Default is 1.
 Can't be 0. Can't be so large that fewer than 10 samples are taken from the burn in and the sweeps.}
+
+\item{pi_prior_sum}{For \code{pi_prior = NA}, the prior on the mixing proportions is set
+as a Dirichlet vector of length C, with each element being W/C, where W is the pi_prior_sum
+and C is the number of collections. By default this is 1.  If it is made much smaller than 1, things
+could start to mix more poorly.}
 }
 \value{
 Tidy data frames in a list with the following components:
@@ -53,7 +75,7 @@ Returns the output of the chosen estimation method
 "MCMC" estimates mixing proportions and individual posterior
 probabilities of assignment through Markov-chain Monte Carlo,
 while "PB" does the same with a parametric bootstrapping correction
-All methods use a uniform 1/(# collections or RUs) prior for the mixing proportions.
+All methods default to a uniform 1/(# collections or RUs) prior for the mixing proportions.
 }
 \examples{
 mcmc <- infer_mixture(reference = small_chinook_ref,

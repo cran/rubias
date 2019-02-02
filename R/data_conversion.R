@@ -348,6 +348,7 @@ allelic_list <- function(cs, ac, samp_type = "both") {
 #' coll_N <- as.vector(table(PO))
 #'
 #' Colls_by_RU <- dplyr::count(ale_long$clean_short, repunit, collection) %>%
+#'    dplyr::filter(n > 0) %>%
 #'    dplyr::select(-n)
 #'  PC <- rep(0, length(unique((Colls_by_RU$repunit))))
 #'  for(i in 1:nrow(Colls_by_RU)) {
@@ -431,18 +432,23 @@ list_diploid_params <- function(AC_list, I_list, PO, coll_N, RU_vec, RU_starts,
 #' include \code{"const"}, \code{"scaled_const"}, and \code{"empirical"}. See
 #' \code{?list_diploid_params} for method details.
 #' @param summ logical indicating whether summary descriptions of the formatted data be provided
-#'
+#' @param ploidies a named vector of ploidies (1 or 2) for each locus.  The names must the the locus names.
 #' @return \code{tcf2param_list} returns the output of \code{list_diploid_params},
 #' after the original dataset is converted to a usable format and all relevant values
 #' are extracted. See \code{?list_diploid_params} for details
 #'
 #' @keywords internal
 #' @examples
-#' ale_par_list <- tcf2param_list(alewife, 17)
+#' # after adding support for haploid markers we need to pass
+#' # in the ploidies vector.  These markers are all diploid...
+#' locnames <- names(alewife)[-(1:16)][c(TRUE, FALSE)]
+#' ploidies <- rep(2, length(locnames))
+#' names(ploidies) <- locnames
+#' ale_par_list <- tcf2param_list(alewife, 17, ploidies = ploidies)
 #'
 #' @export
 tcf2param_list <- function(D, gen_start_col, samp_type = "both",
-                           alle_freq_prior = list("const_scaled" = 1), summ = T){
+                           alle_freq_prior = list("const_scaled" = 1), summ = T, ploidies){
 
   # coerce collection and repunit to be factors.  This is important since things get turned
   # into integers
@@ -479,6 +485,7 @@ tcf2param_list <- function(D, gen_start_col, samp_type = "both",
 
   ### ONLY designed for factorized repunit and collection
   Colls_by_RU <- dplyr::count(cleaned$clean_short[, c("repunit", "collection")], repunit, collection) %>%
+    dplyr::filter(n > 0) %>%
     dplyr::select(-n)
 #  Colls_by_RU <- dplyr::count(cleaned$clean_short, repunit, collection) %>%
 #    dplyr::select(-n)
@@ -491,8 +498,8 @@ tcf2param_list <- function(D, gen_start_col, samp_type = "both",
   RU_vec <- as.integer(Colls_by_RU$collection)
   names(RU_vec) <- as.character(Colls_by_RU$collection)
   params <- list_diploid_params(AC_list, I_list, PO, coll_N, RU_vec, RU_starts, alle_freq_prior)
-  percent.missing <- sum(params$I == 0)/length(params$I) * 100
   RU_list <- unique(cleaned$clean_short$repunit)
+
 
   # here, the names of the indivs, collections, and repunits in the order in which they
   # appear as integers in this data structure.  We should have done this on day one, but
@@ -504,6 +511,17 @@ tcf2param_list <- function(D, gen_start_col, samp_type = "both",
   params$repunit_names <- levels(D$repunit)
   params$locus_names <- names(AC_list)
 
+  params$ploidies <- as.integer(unname(ploidies[params$locus_names]))
+
+  # to compute the percent missing from the long vector I in params, is a little
+  # trickier when we have haploid markers in there, but not much.  Before we just
+  # added everything up, but now we will focus only on the first gene copy in each
+  # pair, since we have enforced that that one will be missing if the locus is missing,
+  # whether it is haploid or not...s
+  mask <- rep(c(TRUE, FALSE), length.out = length(params$I))
+
+  percent.missing <- sum(params$I[mask] == 0)/sum(mask) * 100
+
   if(summ == T){
     cat(paste('Summary Statistics:',
               paste(params$N, 'Individuals in Sample'),
@@ -512,7 +530,7 @@ tcf2param_list <- function(D, gen_start_col, samp_type = "both",
                           paste(levels(RU_list), collapse = ", "))),
               paste(paste(paste(params$C, 'Collections:'),
                           paste(colnames(AC_list[[1]]), collapse = ", "))),
-              paste(percent.missing, '% of allelic data identified as missing', sep = ""),
+              paste(sprintf("%.2f", percent.missing), '% of allelic data identified as missing\n', sep = ""),
               sep = '\n\n'))
   }
 
@@ -544,7 +562,11 @@ tcf2param_list <- function(D, gen_start_col, samp_type = "both",
 #' correct assignment at the collection level, which is too low and variable to serve
 #'  as a stable metric for \code{omega} scaling.
 #' @examples
-#' params <- tcf2param_list(alewife, 17)
+#' locnames <- names(alewife)[-(1:16)][c(TRUE, FALSE)]
+#' ploidies <- rep(2, length(locnames))
+#' names(ploidies) <- locnames
+#'
+#' params <- tcf2param_list(alewife, 17, ploidies = ploidies)
 #' SL <- geno_logL(params) %>% exp() %>% apply(2, function(x) x/sum(x))
 #' correct <- avg_coll2correctRU(SL, params$coll, params$RU_starts, params$RU_vec)
 #' @export

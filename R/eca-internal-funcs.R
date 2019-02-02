@@ -1,8 +1,45 @@
 
+#' infer the ploidy from the pattern of NAs in the columns of data
+#'
+#' This is strictly internal
+#' @param tmp a data frame with 2 * L columns (two for each locus)
+#' @keywords internal
+get_ploidy_from_frame <- function(tmp) {
+  ploidy <- rep(2, ncol(tmp) / 2)  # initialize to diploid
+  locus_names <- names(tmp)[c(TRUE, FALSE)]
+  gc_mism_error <- FALSE
+  j <- 0
+  for (i in seq(1, ncol(tmp), by = 2)) {
+    a <- tmp[,i]
+    b <- tmp[,i+1]
+    j <- j + 1
+
+    looksHaploid <- all(is.na(b))
+    gc_mism <- any(xor(is.na(a), is.na(b)))  # returns true if one gene copy is missing and not the other for any locus
+
+    if (looksHaploid == TRUE) {
+      ploidy[j] <- 1
+      message("Scoring locus ", names(tmp)[i], " as haploid")
+    } else {
+      if(gc_mism == TRUE) {
+        message("Error in input.  At diploid loci, either both or neither gene copies must be missing. Offending locus = ", names(tmp)[i], "\n\tNote! This might indicate that the gen_start_col is incorrect.")
+        gc_mism_error <- TRUE
+      }
+    }
+  }
+  if(gc_mism_error == TRUE) stop("Bailing out due to single gene copies being missing data at non-haploid loci.")
+
+  names(ploidy) <- locus_names
+  ploidy
+}
+
 
 #' A helper function to check that the input data frame is OK
 #'
-#' Just checks to make sure that column types are correct
+#' Just checks to make sure that column types are correct.
+#'
+#' It also checks the patterns of missing data, and from that infers whether
+#' markers are haploid or diploid.
 #' @param D the data frame
 #' @param gen_start_col  the column in which the genetic data starts
 #' @param type For writing errors, supply "mixture" or "reference" as appropriate.
@@ -10,23 +47,51 @@
 #' @export
 check_refmix <- function(D, gen_start_col, type = "reference") {
 
+  # first make sure that the data frame is not grouped
+  if (dplyr::is_grouped_df(D) == TRUE) {
+    stop("D is a grouped data frame.  Please ungroup it before using it in rubias.")
+  }
+
   # first check to make sure that the repunit, collection, and indiv columns are present
   if (!("repunit") %in% names(D)) stop("Missing column \"repunit\" in", type)
   if (!("collection") %in% names(D)) stop("Missing column \"collection\" in", type)
   if (!("indiv") %in% names(D)) stop("Missing column \"indiv\" in", type)
 
-  # now check to see if any of those are not character vectors
-  if (!is.character(D$repunit)) stop("Column \"repunit\" must be a character vector.  It is not in ", type, " data frame")
+  # check to make sure that if any fish has sample_type is "mixture" then it has NA for repunit
+  mixture_nonNAs <- D %>%
+    dplyr::select(sample_type, repunit) %>%
+    dplyr::filter(sample_type == "mixture" & !is.na(repunit))
+
+
+  # now check to see if any of those are not character vectors.  Mixture samples that have NA for their
+  # repunits  might be logicals, so we only freak out if they aren't all NAs and are still not characters
+  if (!all(is.na(D$repunit)) && !is.character(D$repunit)) stop("Column \"repunit\" must be a character vector.  It is not in ", type, " data frame")
   if (!is.character(D$collection)) stop("Column \"collection\" must be a character vector.  It is not in ", type, " data frame")
   if (!is.character(D$indiv)) stop("Column \"indiv\" must be a character vector.  It is not in ", type, " data frame")
 
-  # now, check to make sure that all the locus columns are character or integer:
+
+  if(nrow(mixture_nonNAs) > 0) {
+    stop("Error. All fish of sample_type == \"mixture\" must have repunit == NA. ",
+         nrow(mixture_nonNAs),
+         " fish have sample_type == \"mixture\" but repunit is: ",
+         paste(unique(mixture_nonNAs$repunit), collapse = ", "))
+  }
+
+  # now, check to make sure that all the locus columns are character or integer (or logical, as the case
+  # might be if they are all missing to denote haploids).
   tmp <- D[, -(1:(gen_start_col - 1))]
-  char_or_int <- sapply(tmp, is.character) | sapply(tmp, is.integer)
+  char_or_int <- sapply(tmp, is.character) | sapply(tmp, is.integer) | sapply(tmp, is.logical)
+
   if (any(!char_or_int)) {
     stop("All locus columns must be of characters or integers.  These in ", type, " are not: ",
          paste(names(char_or_int[!char_or_int]), collapse = ", "))
   }
+
+  # now cycle over the loci and check the pattern of missing data.  Any individual
+  # with missing data must be missing at both gene copies, unless it is a haploid
+  # marker, in which case it must be missing at the second gene copy in everyone.
+  ploidy <- get_ploidy_from_frame(tmp)
+
 
   # check also to make sure that indiv IDs are unique
   dupies <- tibble::tibble(indiv = D$indiv) %>%
@@ -40,6 +105,7 @@ check_refmix <- function(D, gen_start_col, type = "reference") {
   # now, check to make sure that no collection is associated with more than one repunit
   msc <- D[, c("repunit", "collection")] %>%
     dplyr::count(repunit, collection) %>%
+    dplyr::filter(n > 0) %>%
     dplyr::group_by(collection) %>%
     dplyr::mutate(times_seen = n()) %>%
     dplyr::filter(times_seen > 1) %>%
@@ -50,7 +116,8 @@ check_refmix <- function(D, gen_start_col, type = "reference") {
     stop("Each collection must belong to no more than one repunit.  Offenders in ", type, ":\n\t", err_str)
   }
 
-
+  # at the end, we return a vector of ploidies (1 or 2) for the loci
+  ploidy
 }
 
 
