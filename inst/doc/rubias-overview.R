@@ -197,6 +197,14 @@ with_kc <- infer_mixture(kc_ref, kc_mix, 6)
 with_kc$mixing_proportions %>% 
   arrange(mixture_collection, desc(pi))
 
+## ---- eval=FALSE---------------------------------------------------------
+#  full_model_results <- infer_mixture(
+#    reference = chinook,
+#    mixture = chinook_mix,
+#    gen_start_col = 5,
+#    method = "BR"
+#    )
+
 ## ----self-ass------------------------------------------------------------
 sa_chinook <- self_assign(reference = chinook, gen_start_col = 5)
 
