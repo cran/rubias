@@ -4,8 +4,15 @@
 \alias{gsi_mcmc_fb}
 \title{MCMC from the fully Bayesian GSI model for pi and the individual posterior probabilities}
 \usage{
-gsi_mcmc_fb(par_list, Pi_init, lambda, reps, burn_in, sample_int_Pi,
-  sample_int_PofZ)
+gsi_mcmc_fb(
+  par_list,
+  Pi_init,
+  lambda,
+  reps,
+  burn_in,
+  sample_int_Pi,
+  sample_int_PofZ
+)
 }
 \arguments{
 \item{par_list}{genetic data converted to the param_list format by \code{tcf2param_list}}
@@ -51,6 +58,8 @@ names(ploidies) <- locnames
 
 params <- tcf2param_list(alewife, 17, ploidies = ploidies)
 lambda <- rep(1/params$C, params$C)
-mcmc <- gsi_mcmc_fb(params, lambda, lambda, 200, 50, 5, 5)
+# use very short run and burn in so it doesn't take too long
+# when checking on CRAN
+mcmc <- gsi_mcmc_fb(params, lambda, lambda, 20, 5, 4, 4)
 }
 \keyword{internal}

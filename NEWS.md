@@ -1,3 +1,8 @@
+# rubias 0.3.1
+
+## Changes
+
+* Tiny tweak in one function to fix a breaking change in tibble 3.0.0.
 
 # rubias 0.3.0
 

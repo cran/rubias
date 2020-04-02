@@ -2,7 +2,7 @@ Package: rubias
 Type: Package
 Title: Bayesian Inference from the Conditional Genetic Stock
         Identification Model
-Version: 0.3.0
+Version: 0.3.1
 Authors@R: c(
     person(given = c("Eric", "C."), family = "Anderson", email = "eric.anderson@noaa.gov", role = c("aut", "cre")),
     person(given = "Ben", family = "Moran", email = "moran.ben@husky.neu.edu", role = c("aut"))
@@ -20,13 +20,13 @@ Imports: dplyr, gtools, magrittr, Rcpp (>= 0.12.5), readr, rlang,
         stringr, tibble, tidyr, RcppParallel
 LinkingTo: Rcpp, RcppParallel
 SystemRequirements: GNU make
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.0
 Suggests: knitr, rmarkdown, ggplot2
 VignetteBuilder: knitr
 Encoding: UTF-8
 NeedsCompilation: yes
-Packaged: 2019-06-10 04:06:20 UTC; eriq
+Packaged: 2020-04-02 19:27:00 UTC; eriq
 Author: Eric C. Anderson [aut, cre],
   Ben Moran [aut]
 Repository: CRAN
-Date/Publication: 2019-06-10 15:00:03 UTC
+Date/Publication: 2020-04-02 20:10:02 UTC
