@@ -12,17 +12,42 @@
 
 <meta name="author" content="Eric C. Anderson" />
 
-<meta name="date" content="2020-04-02" />
+<meta name="date" content="2021-01-15" />
 
 <title>An Explanation of the Underlying Data Structures in rubias</title>
 
+<script>// Hide empty <a> tag within highlighted CodeBlock for screen reader accessibility (see https://github.com/jgm/pandoc/issues/6352#issuecomment-626106786) -->
+// v0.0.1
+// Written by JooYoung Seo (jooyoung@psu.edu) and Atsushi Yasumoto on June 1st, 2020.
+
+document.addEventListener('DOMContentLoaded', function() {
+  const codeList = document.getElementsByClassName("sourceCode");
+  for (var i = 0; i < codeList.length; i++) {
+    var linkList = codeList[i].getElementsByTagName('a');
+    for (var j = 0; j < linkList.length; j++) {
+      if (linkList[j].innerHTML === "") {
+        linkList[j].setAttribute('aria-hidden', 'true');
+      }
+    }
+  }
+});
+</script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
 
 
 <style type="text/css">code{white-space: pre;}</style>
 <style type="text/css" data-origin="pandoc">
-a.sourceLine { display: inline-block; line-height: 1.25; }
-a.sourceLine { pointer-events: none; color: inherit; text-decoration: inherit; }
-a.sourceLine:empty { height: 1.2em; }
+code.sourceCode > span { display: inline-block; line-height: 1.25; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode { white-space: pre; position: relative; }
 div.sourceCode { margin: 1em 0; }
@@ -32,14 +57,16 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 code.sourceCode { white-space: pre-wrap; }
-a.sourceLine { text-indent: -1em; padding-left: 1em; }
+code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
 }
-pre.numberSource a.sourceLine
-  { position: relative; left: -4em; }
-pre.numberSource a.sourceLine::before
-  { content: attr(data-line-number);
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
     position: relative; left: -1em; text-align: right; vertical-align: baseline;
-    border: none; pointer-events: all; display: inline-block;
+    border: none; display: inline-block;
     -webkit-touch-callout: none; -webkit-user-select: none;
     -khtml-user-select: none; -moz-user-select: none;
     -ms-user-select: none; user-select: none;
@@ -48,9 +75,9 @@ pre.numberSource a.sourceLine::before
   }
 pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
 div.sourceCode
-  {  }
+  {   }
 @media screen {
-a.sourceLine::before { text-decoration: underline; }
+code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
 code span.al { color: #ff0000; font-weight: bold; } /* Alert */
 code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
@@ -104,6 +131,7 @@ code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warni
   }
 })();
 </script>
+
 
 
 
@@ -301,7 +329,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">An Explanation of the Underlying Data Structures in rubias</h1>
 <h4 class="author">Eric C. Anderson</h4>
-<h4 class="date">2020-04-02</h4>
+<h4 class="date">2021-01-15</h4>
 
 
 
@@ -311,40 +339,40 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 <h2>The <code>param_list</code></h2>
 <p>The basic data structure is what we call a <code>param_list</code>. it has the following named elements, which are briefly described here. We will describe each in detail in separate sections below.</p>
 <ul>
-<li><code>L</code>: the number of loci, an integer</li>
-<li><code>N</code>: the number of individuals (integer)<br />
-</li>
-<li><code>C</code>: the number of collections in the reference data set (integer)</li>
-<li><code>A</code>: the number of alleles at each locus (integer vector of length L)</li>
-<li><code>CA</code>: the “cumulative number of alleles” at each locus. For each locus this gives the base-0 index of the first allele at the locus (if you were to line all the alleles at each locus up one after another.)</li>
-<li><code>coll</code>: an integer vector of length N that gives the index of the collection that each fish is in.</li>
-<li><code>coll_N</code>: an integer vector of length C that gives the number of fish in each of the collections</li>
-<li><code>RU_vec</code>: This is the hardest one to figure out / remember. Imagine that each collection has an index from 1 up to C, and imagine that each collection belongs to a single reporting unit. Each reporting unit is assigned an integer. Now, sort everything first by reporting unit index and then by collection index. The order that you get is the order of the collections in <code>RU_vec</code>. This vector is a named integer vector. The collections are in the order as described above. The names are the collection names and the values are the base-1 index of each collection.<br />
-</li>
+<li><p><code>L</code>: the number of loci, an integer</p></li>
+<li><p><code>N</code>: the number of individuals (integer)<br />
+</p></li>
+<li><p><code>C</code>: the number of collections in the reference data set (integer)</p></li>
+<li><p><code>A</code>: the number of alleles at each locus (integer vector of length L)</p></li>
+<li><p><code>CA</code>: the “cumulative number of alleles” at each locus. For each locus this gives the base-0 index of the first allele at the locus (if you were to line all the alleles at each locus up one after another.)</p></li>
+<li><p><code>coll</code>: an integer vector of length N that gives the index of the collection that each fish is in.</p></li>
+<li><p><code>coll_N</code>: an integer vector of length C that gives the number of fish in each of the collections</p></li>
+<li><p><code>RU_vec</code>: This is the hardest one to figure out / remember. Imagine that each collection has an index from 1 up to C, and imagine that each collection belongs to a single reporting unit. Each reporting unit is assigned an integer. Now, sort everything first by reporting unit index and then by collection index. The order that you get is the order of the collections in <code>RU_vec</code>. This vector is a named integer vector. The collections are in the order as described above. The names are the collection names and the values are the base-1 index of each collection.<br />
+</p></li>
 <li><p><code>RU_starts</code>: The base-0 index of the starting position of each reporting unit in the <code>RU_vec</code> vector. This is a named integer vector. For example, the first few entries of the chinook data set are:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" data-line-number="1">ploidies &lt;-<span class="st"> </span><span class="kw">check_refmix</span>(chinook, <span class="dv">5</span>)</a>
-<a class="sourceLine" id="cb1-2" data-line-number="2">cpar &lt;-<span class="st"> </span><span class="kw">tcf2param_list</span>(chinook, <span class="dv">5</span>, <span class="dt">summ =</span> <span class="ot">FALSE</span>, <span class="dt">ploidies =</span> ploidies)</a>
-<a class="sourceLine" id="cb1-3" data-line-number="3">cpar<span class="op">$</span>RU_starts[<span class="dv">1</span><span class="op">:</span><span class="dv">5</span>]</a>
-<a class="sourceLine" id="cb1-4" data-line-number="4"><span class="co">#&gt; CentralValleyfa CentralValleysp CentralValleywi CaliforniaCoast        KlamathR </span></a>
-<a class="sourceLine" id="cb1-5" data-line-number="5"><span class="co">#&gt;               0               8              12              13              15</span></a></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1"></a>ploidies &lt;-<span class="st"> </span><span class="kw">check_refmix</span>(chinook, <span class="dv">5</span>)</span>
+<span id="cb1-2"><a href="#cb1-2"></a>cpar &lt;-<span class="st"> </span><span class="kw">tcf2param_list</span>(chinook, <span class="dv">5</span>, <span class="dt">summ =</span> <span class="ot">FALSE</span>, <span class="dt">ploidies =</span> ploidies)</span>
+<span id="cb1-3"><a href="#cb1-3"></a>cpar<span class="op">$</span>RU_starts[<span class="dv">1</span><span class="op">:</span><span class="dv">5</span>]</span>
+<span id="cb1-4"><a href="#cb1-4"></a><span class="co">#&gt; CentralValleyfa CentralValleysp CentralValleywi CaliforniaCoast        KlamathR </span></span>
+<span id="cb1-5"><a href="#cb1-5"></a><span class="co">#&gt;               0               8              12              13              15</span></span></code></pre></div>
 <p>and if we look at the first 15 elements of <code>RU_vec</code> it gives us the names and the indices of the collections in those first 4 listed reporting units:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1">cpar<span class="op">$</span>RU_vec[<span class="dv">1</span><span class="op">:</span><span class="dv">15</span>]</a>
-<a class="sourceLine" id="cb2-2" data-line-number="2"><span class="co">#&gt;         Feather_H_sp         Feather_H_fa          Butte_Cr_fa </span></a>
-<a class="sourceLine" id="cb2-3" data-line-number="3"><span class="co">#&gt;                    1                    6                    7 </span></a>
-<a class="sourceLine" id="cb2-4" data-line-number="4"><span class="co">#&gt;           Mill_Cr_fa           Deer_Cr_fa       Mokelumne_R_fa </span></a>
-<a class="sourceLine" id="cb2-5" data-line-number="5"><span class="co">#&gt;                    8                    9                   10 </span></a>
-<a class="sourceLine" id="cb2-6" data-line-number="6"><span class="co">#&gt;            Battle_Cr      Sacramento_R_lf          Butte_Cr_Sp </span></a>
-<a class="sourceLine" id="cb2-7" data-line-number="7"><span class="co">#&gt;                   11                   12                    2 </span></a>
-<a class="sourceLine" id="cb2-8" data-line-number="8"><span class="co">#&gt;           Mill_Cr_sp           Deer_Cr_sp UpperSacramento_R_sp </span></a>
-<a class="sourceLine" id="cb2-9" data-line-number="9"><span class="co">#&gt;                    3                    4                    5 </span></a>
-<a class="sourceLine" id="cb2-10" data-line-number="10"><span class="co">#&gt;         Sacramento_H                Eel_R            Russian_R </span></a>
-<a class="sourceLine" id="cb2-11" data-line-number="11"><span class="co">#&gt;                   13                   14                   15</span></a></code></pre></div></li>
-<li><code>I</code>: an integer vector giving the allelic type of each gene copy carried by each individual. For ploidy = 2 (the only case implemented so far) this vector is of length (N * L * 2). An entry of 0 denotes missing data, and the observed alleles are named 1, 2, …</li>
-<li><code>AC</code>: this is a flat integer vector of the counts of alleles of different types in the different populations. It has length C * sum(A) (i.e. the number of collections in the reference times that total number of alleles at all the loci.). This is created by a somewhat lengthy process: first the function <code>reference_allele_counts()</code> makes a long data frame that has <code>collection</code>, <code>locus</code>, <code>allele</code>, and <code>counts</code>. This then gets turned into a list of matrices in <code>a_freq_list()</code>. One matrix for each collection. The rows are the different alleles and the columns are the different populations. Then in <code>list_diploid_params()</code> that list of matrices gets flattened into one long integer vector.<br />
-One of the weaknesses as I see that now, is that the loci are arranged alphabetically, rather than by input order. We should at least include the names of the loci in the order in which they appear so that we can get back to the loci, if necessary. The order of the loci coming out of this process is used to make sure that it corresponds to the order of the loci in <code>I</code>, which is good, but not super intuitive. At any rate, from the foregoing, it can be deduced that we can index into this vector thus (all indexes are base-0): if we want the count of the a-th allele at the l-th locus in the c-th collection then we get that by base-0 subscipting <code>AC</code> by <code>[C * CA[l] + c * A[l] + a].  Where</code>C<code>is the number of collections,</code>CA<code>is the cumulative number of alleles, and</code>A<code>is the number of alleles at each locus. Now it should be clear why we store</code>CA`—this is where we use it!</li>
-<li><code>sum_AC</code>: the sum of the allele counts at each locus for each collection in the reference data set. (Basically the number of observed gene copies at the locus in the reference data set). This gets computed in <code>list_diploid_params()</code> from the list of matrices returned by <code>a_freq_list()</code>. It is of length L * C. It is a named vector with the names taking <code>Locus.Collection</code>, but I don’t think those names get used at all. It gets indexed as <code>[l * C + c]</code></li>
-<li><code>DP</code>: this is a vector completely parallel to <code>AC</code> but in which the prior weights have been added to each allele in each collection.<br />
-</li>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1"></a>cpar<span class="op">$</span>RU_vec[<span class="dv">1</span><span class="op">:</span><span class="dv">15</span>]</span>
+<span id="cb2-2"><a href="#cb2-2"></a><span class="co">#&gt;         Feather_H_sp         Feather_H_fa          Butte_Cr_fa </span></span>
+<span id="cb2-3"><a href="#cb2-3"></a><span class="co">#&gt;                    1                    6                    7 </span></span>
+<span id="cb2-4"><a href="#cb2-4"></a><span class="co">#&gt;           Mill_Cr_fa           Deer_Cr_fa       Mokelumne_R_fa </span></span>
+<span id="cb2-5"><a href="#cb2-5"></a><span class="co">#&gt;                    8                    9                   10 </span></span>
+<span id="cb2-6"><a href="#cb2-6"></a><span class="co">#&gt;            Battle_Cr      Sacramento_R_lf          Butte_Cr_Sp </span></span>
+<span id="cb2-7"><a href="#cb2-7"></a><span class="co">#&gt;                   11                   12                    2 </span></span>
+<span id="cb2-8"><a href="#cb2-8"></a><span class="co">#&gt;           Mill_Cr_sp           Deer_Cr_sp UpperSacramento_R_sp </span></span>
+<span id="cb2-9"><a href="#cb2-9"></a><span class="co">#&gt;                    3                    4                    5 </span></span>
+<span id="cb2-10"><a href="#cb2-10"></a><span class="co">#&gt;         Sacramento_H                Eel_R            Russian_R </span></span>
+<span id="cb2-11"><a href="#cb2-11"></a><span class="co">#&gt;                   13                   14                   15</span></span></code></pre></div></li>
+<li><p><code>I</code>: an integer vector giving the allelic type of each gene copy carried by each individual. For ploidy = 2 (the only case implemented so far) this vector is of length (N * L * 2). An entry of 0 denotes missing data, and the observed alleles are named 1, 2, …</p></li>
+<li><p><code>AC</code>: this is a flat integer vector of the counts of alleles of different types in the different populations. It has length C * sum(A) (i.e. the number of collections in the reference times that total number of alleles at all the loci.). This is created by a somewhat lengthy process: first the function <code>reference_allele_counts()</code> makes a long data frame that has <code>collection</code>, <code>locus</code>, <code>allele</code>, and <code>counts</code>. This then gets turned into a list of matrices in <code>a_freq_list()</code>. One matrix for each collection. The rows are the different alleles and the columns are the different populations. Then in <code>list_diploid_params()</code> that list of matrices gets flattened into one long integer vector.<br />
+One of the weaknesses as I see that now, is that the loci are arranged alphabetically, rather than by input order. We should at least include the names of the loci in the order in which they appear so that we can get back to the loci, if necessary. The order of the loci coming out of this process is used to make sure that it corresponds to the order of the loci in <code>I</code>, which is good, but not super intuitive. At any rate, from the foregoing, it can be deduced that we can index into this vector thus (all indexes are base-0): if we want the count of the a-th allele at the l-th locus in the c-th collection then we get that by base-0 subscipting <code>AC</code> by <code>[C * CA[l] + c * A[l] + a].  Where</code>C<code>is the number of collections,</code>CA<code>is the cumulative number of alleles, and</code>A<code>is the number of alleles at each locus. Now it should be clear why we store</code>CA`—this is where we use it!</p></li>
+<li><p><code>sum_AC</code>: the sum of the allele counts at each locus for each collection in the reference data set. (Basically the number of observed gene copies at the locus in the reference data set). This gets computed in <code>list_diploid_params()</code> from the list of matrices returned by <code>a_freq_list()</code>. It is of length L * C. It is a named vector with the names taking <code>Locus.Collection</code>, but I don’t think those names get used at all. It gets indexed as <code>[l * C + c]</code></p></li>
+<li><p><code>DP</code>: this is a vector completely parallel to <code>AC</code> but in which the prior weights have been added to each allele in each collection.<br />
+</p></li>
 <li><p><code>sum_DP</code>: this is the sum of Dirichlet Parameters <code>DP</code> for each locus and each collection. It is parallel to <code>sum_AC</code>.</p></li>
 </ul>
 <p>Finally, we have some entries that we should have had from day one, but didn’t, so they aren’t consistently used throughout the code to access the names of entities ordered as they ended up ordered: - <code>indiv_names</code> - <code>collection_names</code> - <code>repunit_names</code> - <code>locus_names</code></p>
